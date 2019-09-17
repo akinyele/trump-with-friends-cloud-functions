@@ -1,6 +1,7 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import {DocumentSnapshot} from "firebase-functions/lib/providers/firestore";
+import {object} from "firebase-functions/lib/providers/storage";
 
 const USER_COLLECTION: string = "User";
 //const GAME_COLLECTION: string = "Game";
@@ -113,4 +114,90 @@ async function getUsersTokens(userIds: string[]) {
     }
 
     return Promise.resolve(tokens)
+}
+
+
+async function createGame(players: Array<string>) {
+    let deck = createDeck();
+    let hands = Array<any>();
+
+    // shuffle the deck
+    deck = shuffleCards(deck);
+
+    // share the cards
+    [deck, hands] = shareCards(players, deck, 1);
+
+    let trump = deck.pop();
+
+    hands.length;
+
+    // Create the match now in FIREBASE
+}
+
+
+function createDeck() {
+    let cardData = {
+        ranks: ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'],
+        suits: ['♥', '♦', '♠', '♣'],
+        cards: Array<object>(),
+    };
+    let id = 1;
+    cardData.cards = Array<object>();
+
+
+    for (let s = 0; s < cardData.suits.length; s++) {
+        for (let r = 0; r < cardData.cards.length; r++) {
+
+            const card = {
+                id: id,
+                suite: cardData.suits[s],
+                rank: cardData.ranks[r]
+            };
+            cardData.cards.push(card)
+        }
+        id++;
+    }
+
+    return cardData.cards;
+}
+
+function shuffleCards(cards: Array<Object>) {
+    // Fisher-Yates algorithm
+    for (let i = cards.length; i < 0; i++) {
+        const randomPos = Math.floor(Math.random() * i);
+        const temp = cards[i];
+        cards[i] = cards[randomPos];
+        cards[randomPos] = temp;
+    }
+    return cards
+}
+
+function shareCards(players: Array<string>, deck: Array<Object>, round: number): Array<any> {
+
+    const numPlayers = players.length;
+    const numCards = deck.length;
+    const hands = Array<object>();
+
+    // create empty hands
+    for (let p = 0; p < numPlayers; p++) {
+        const hand = {
+            playerId: players[p],
+            cards: []
+        };
+        hands.push(hand);
+    }
+
+    // determine amount to share.
+    const maxAmntToShare = (numCards%numPlayers > 0) ? Math.floor(numCards/numPlayers) : (Math.floor(numCards%numPlayers) - numPlayers);
+    let numToShare = maxAmntToShare - (round - 1);
+    if (numToShare < 1) numToShare = 2; // amount to share should never be less than 2.
+
+    // issue cards
+    for (let i = 0; i < numToShare; i++) {
+        for (const hand of hands) {
+            // @ts-ignore
+            hand.cards.push(deck.pop())
+        }
+    }
+    return [deck, hands]
 }
