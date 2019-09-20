@@ -1,7 +1,6 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import {DocumentSnapshot} from "firebase-functions/lib/providers/firestore";
-import {object} from "firebase-functions/lib/providers/storage";
 
 const USER_COLLECTION: string = "User";
 //const GAME_COLLECTION: string = "Game";
@@ -67,8 +66,24 @@ export const onGamesUpdated = functions.firestore.document('Game/{gameId}').onUp
                     data: {...messageData.data}
                 };
 
-                // TODO create game then notify users.
-                // TODO Set Flag on GameRoom to say game created/started when this flag is set to true. don't notify anyone.
+
+                try {
+                    const trumpMatch = await createGame(gameRoomData.players);
+                    await admin.firestore().doc(`Game/${gameRoomData.id}/MatchInfo`).create(trumpMatch);
+                } catch (e) {
+
+                    // TODO handle case where the game was failed to be created.
+
+                }
+
+                try {
+                    gameRoomData.gameStarted = true;
+                    await admin.firestore().doc(`Game/${gameRoomData.id}`).set(gameRoomData);
+                } catch (e) {
+                    //TODO handle case where the game started flag failed to set.
+
+                }
+
 
                 console.log("sending notification to users", tokens, payload);
                 return notifyUsers(tokens, payload)
@@ -118,20 +133,30 @@ async function getUsersTokens(userIds: string[]) {
 
 
 async function createGame(players: Array<string>) {
+    let hands: any[];
     let deck = createDeck();
-    let hands = Array<any>();
+    const round = 1;
 
     // shuffle the deck
     deck = shuffleCards(deck);
 
     // share the cards
-    [deck, hands] = shareCards(players, deck, 1);
+    [deck, hands] = shareCards(players, deck, round);
 
-    let trump = deck.pop();
+    const trump = deck.pop();
 
-    hands.length;
 
-    // Create the match now in FIREBASE
+    // Create the match
+    return {
+        gameRound: round,
+        theTrump: trump,
+        scoreLog: "",
+        bids: Array(),
+        players: players,
+        pots: null,
+        deck: deck,
+        hands: hands
+    };
 }
 
 
@@ -188,7 +213,7 @@ function shareCards(players: Array<string>, deck: Array<Object>, round: number):
     }
 
     // determine amount to share.
-    const maxAmntToShare = (numCards%numPlayers > 0) ? Math.floor(numCards/numPlayers) : (Math.floor(numCards%numPlayers) - numPlayers);
+    const maxAmntToShare = (numCards % numPlayers > 0) ? Math.floor(numCards / numPlayers) : (Math.floor(numCards % numPlayers) - numPlayers);
     let numToShare = maxAmntToShare - (round - 1);
     if (numToShare < 1) numToShare = 2; // amount to share should never be less than 2.
 
