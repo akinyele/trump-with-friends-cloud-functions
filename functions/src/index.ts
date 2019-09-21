@@ -21,6 +21,8 @@ admin.initializeApp();
 // https://firebase.google.com/docs/functions/typescript
 
 export const getGames = functions.https.onRequest((request, response) => {
+
+
     admin.firestore().doc("Game").get()
         .then(gamesSnapshot => {
 
@@ -35,8 +37,15 @@ export const getGames = functions.https.onRequest((request, response) => {
 });
 
 
+export const testFunction = functions.https.onRequest(async (request, response) => {
+    const body = request.body;
+    const trumpGame = await createGame(body.players);
+    response.send(trumpGame)
+});
+
+
 export const onGamesUpdated = functions.firestore.document('Game/{gameId}').onUpdate(async change => {
-        let gameRoomData = change.after.data();
+        const gameRoomData = change.after.data();
         let isRoomFull = false;
 
         // Check to see if the game room is full
@@ -45,16 +54,14 @@ export const onGamesUpdated = functions.firestore.document('Game/{gameId}').onUp
         if (gameRoomData) {
             isRoomFull = gameRoomData.playerAmount.toString() === gameRoomData.players.length.toString();
 
-            if (isRoomFull) {
-                // TODO Notify users that game room is full.
+            if (isRoomFull && !gameRoomData.gameStarted) {
                 console.log("game room full notify user");
-
                 const tokens: string[] = await getUsersTokens(gameRoomData.players);
 
                 const messageData = {
                     content: "Your trump game is ready, everyone is waiting.",
                     data: {
-                        roomId: gameRoomData.gameId
+                        roomCode: gameRoomData.roomCode
                     }
                 };
 
@@ -68,20 +75,12 @@ export const onGamesUpdated = functions.firestore.document('Game/{gameId}').onUp
 
 
                 try {
-                    const trumpMatch = await createGame(gameRoomData.players);
-                    await admin.firestore().doc(`Game/${gameRoomData.id}/MatchInfo`).create(trumpMatch);
-                } catch (e) {
-
-                    // TODO handle case where the game was failed to be created.
-
-                }
-
-                try {
+                    gameRoomData.matchInfo = await createGame(gameRoomData.players);
                     gameRoomData.gameStarted = true;
-                    await admin.firestore().doc(`Game/${gameRoomData.id}`).set(gameRoomData);
+                    await admin.firestore().doc(`Game/${gameRoomData.roomCode}`).update(gameRoomData);
                 } catch (e) {
                     //TODO handle case where the game started flag failed to set.
-
+                    console.log("Unable to update game room started flag", e)
                 }
 
 
@@ -161,29 +160,26 @@ async function createGame(players: Array<string>) {
 
 
 function createDeck() {
-    let cardData = {
+    const cardData = {
         ranks: ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'],
         suits: ['♥', '♦', '♠', '♣'],
-        cards: Array<object>(),
     };
     let id = 1;
-    cardData.cards = Array<object>();
-
+    const cards = Array<object>();
 
     for (let s = 0; s < cardData.suits.length; s++) {
-        for (let r = 0; r < cardData.cards.length; r++) {
-
+        for (let r = 0; r < cardData.ranks.length; r++) {
             const card = {
                 id: id,
                 suite: cardData.suits[s],
                 rank: cardData.ranks[r]
             };
-            cardData.cards.push(card)
+            cards.push(card);
+            id++;
         }
-        id++;
     }
 
-    return cardData.cards;
+    return cards;
 }
 
 function shuffleCards(cards: Array<Object>) {
@@ -213,9 +209,9 @@ function shareCards(players: Array<string>, deck: Array<Object>, round: number):
     }
 
     // determine amount to share.
-    const maxAmntToShare = (numCards % numPlayers > 0) ? Math.floor(numCards / numPlayers) : (Math.floor(numCards % numPlayers) - numPlayers);
+    const maxAmntToShare = (numCards % numPlayers > 0) ? Math.floor(numCards / numPlayers) : (Math.floor(numCards / numPlayers) - 1);
     let numToShare = maxAmntToShare - (round - 1);
-    if (numToShare < 1) numToShare = 2; // amount to share should never be less than 2.
+    if (numToShare <= 1) numToShare = 2; // amount to share should never be less than 2.
 
     // issue cards
     for (let i = 0; i < numToShare; i++) {
