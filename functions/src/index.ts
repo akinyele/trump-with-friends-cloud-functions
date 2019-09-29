@@ -83,7 +83,6 @@ export const onGamesUpdated = functions.firestore.document('Game/{gameId}').onUp
                     console.log("Unable to update game room started flag", e)
                 }
 
-
                 console.log("sending notification to users", tokens, payload);
                 return notifyUsers(tokens, payload)
                     .then(devicesResponse => {
@@ -152,7 +151,7 @@ async function createGame(players: Array<string>) {
         scoreLog: "",
         bids: Array(),
         players: players,
-        pots: null,
+        pots: [],
         deck: deck,
         hands: hands
     };
@@ -161,8 +160,10 @@ async function createGame(players: Array<string>) {
 
 function createDeck() {
     const cardData = {
-        ranks: ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'],
-        suits: ['♥', '♦', '♠', '♣'],
+        //ranks: ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'],
+        // suits: ['♥', '♦', '♠', '♣'],
+        ranks: ["A","TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "J", "Q", "K"],
+        suits: ['HEART', 'DIAMOND', 'SPADE', 'CLUB'],
     };
     let id = 1;
     const cards = Array<object>();
