@@ -21,11 +21,8 @@ admin.initializeApp();
 // https://firebase.google.com/docs/functions/typescript
 
 export const getGames = functions.https.onRequest((request, response) => {
-
-
     admin.firestore().doc("Game").get()
         .then(gamesSnapshot => {
-
             const data = gamesSnapshot.data();
             console.log(data);
             response.send(data);
@@ -36,14 +33,15 @@ export const getGames = functions.https.onRequest((request, response) => {
         })
 });
 
-
 export const testFunction = functions.https.onRequest(async (request, response) => {
     const body = request.body;
     const trumpGame = await createGame(body.players);
     response.send(trumpGame)
 });
 
-
+/**
+ *
+ */
 export const onGamesUpdated = functions.firestore.document('Game/{gameId}').onUpdate(async change => {
         const gameRoomData = change.after.data();
         let isRoomFull = false;
@@ -73,7 +71,6 @@ export const onGamesUpdated = functions.firestore.document('Game/{gameId}').onUp
                     data: {...messageData.data}
                 };
 
-
                 try {
                     gameRoomData.matchInfo = await createGame(gameRoomData.players);
                     gameRoomData.gameStarted = true;
@@ -94,14 +91,12 @@ export const onGamesUpdated = functions.firestore.document('Game/{gameId}').onUp
             }
         }
         return null
-    })
-;
+    });
 
 
 function notifyUsers(userTokens: string[], messagePayload: object) {
     return admin.messaging().sendToDevice(userTokens, messagePayload)
 }
-
 
 async function getUser(userId: string): Promise<DocumentSnapshot> {
     return admin.firestore().doc(`${USER_COLLECTION}/${userId}`).get()
@@ -128,7 +123,6 @@ async function getUsersTokens(userIds: string[]) {
 
     return Promise.resolve(tokens)
 }
-
 
 async function createGame(players: Array<string>) {
     let hands: any[];
@@ -157,7 +151,6 @@ async function createGame(players: Array<string>) {
     };
 }
 
-
 function createDeck() {
     const cardData = {
         //ranks: ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'],
@@ -168,6 +161,7 @@ function createDeck() {
     let id = 1;
     const cards = Array<object>();
 
+    // tslint:disable-next-line:prefer-for-of
     for (let s = 0; s < cardData.suits.length; s++) {
         for (let r = 0; r < cardData.ranks.length; r++) {
             const card = {
