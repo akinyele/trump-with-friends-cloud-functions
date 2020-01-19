@@ -3,8 +3,18 @@ import * as admin from 'firebase-admin';
 import {DocumentSnapshot} from "firebase-functions/lib/providers/firestore";
 
 const USER_COLLECTION: string = "User";
-//const GAME_COLLECTION: string = "Game";
+const GAME_ROOM_COLLECTION: string = "Game";
+const GAME_ROUND_COLLECTION: string = "Rounds";
+const HANDS_COLLECTIONS: string = "Hands";
 
+
+/**
+ *
+ * TODO's Change the structure so that olny the respective user can see their hand.
+ * Create a hands' sub collection that store the current hands for the user. Use the user id as the key so that
+ * only the user can draw their hand.
+ *
+ */
 
 /**
  *
@@ -19,7 +29,6 @@ admin.initializeApp();
 
 // Start writing Firebase Functions
 // https://firebase.google.com/docs/functions/typescript
-
 export const getGames = functions.https.onRequest((request, response) => {
     admin.firestore().doc("Game").get()
         .then(gamesSnapshot => {
@@ -35,64 +44,91 @@ export const getGames = functions.https.onRequest((request, response) => {
 
 export const testFunction = functions.https.onRequest(async (request, response) => {
     const body = request.body;
-    const trumpGame = await createGame(body.players);
-    response.send(trumpGame)
+    const trumpGame = await createRound(body.players);
+
+
+    // const hello = await admin.firestore().doc(`Game/OkrWZPznW`).collection("Rounds").add({hello: "hello"});
+    // console.log("Hellloooo", hello);
+
+    response.send(trumpGame);
 });
 
 /**
- *
+ * Checks to see if the game room is full then creates the game room notify the users.
+ * TODO change function to on game room update
  */
 export const onGamesUpdated = functions.firestore.document('Game/{gameId}').onUpdate(async change => {
-        const gameRoomData = change.after.data();
-        let isRoomFull = false;
+    const gameRoomData = change.after.data();
 
-        // Check to see if the game room is full
-        console.log("game room updated", gameRoomData);
+    let isRoomFull = false;
 
-        if (gameRoomData) {
-            isRoomFull = gameRoomData.playerAmount.toString() === gameRoomData.players.length.toString();
+    // Check to see if the game room is full
+    console.log("game room updated", gameRoomData);
 
-            if (isRoomFull && !gameRoomData.gameStarted) {
-                console.log("game room full notify user");
-                const tokens: string[] = await getUsersTokens(gameRoomData.players);
+    if (gameRoomData) {
+        isRoomFull = gameRoomData.playerAmount.toString() === gameRoomData.players.length.toString();
 
-                const messageData = {
-                    content: "Your trump game is ready, everyone is waiting.",
-                    data: {
-                        roomCode: gameRoomData.roomCode
-                    }
-                };
+        if (isRoomFull && !gameRoomData.gameStarted) {
+            console.log("game room full notify user");
+            const tokens: string[] = await getUsersTokens(gameRoomData.players);
 
-                const payload = {
-                    notification: {
-                        title: "Ready for Trump!!",
-                        body: messageData.content,
-                    },
-                    data: {...messageData.data}
-                };
+            const messageData = {
+                content: "Your trump game is ready, everyone is waiting.",
+                data: {
+                    roomCode: gameRoomData.roomCode
+                }
+            };
 
-                try {
-                    gameRoomData.matchInfo = await createGame(gameRoomData.players);
-                    gameRoomData.gameStarted = true;
-                    await admin.firestore().doc(`Game/${gameRoomData.roomCode}`).update(gameRoomData);
-                } catch (e) {
-                    //TODO handle case where the game started flag failed to set.
-                    console.log("Unable to update game room started flag", e)
+            const payload = {
+                notification: {
+                    title: "Ready for Trump!!",
+                    body: messageData.content,
+                },
+                data: {...messageData.data}
+            };
+
+            try {
+                const [firstRound, hands] =  await createRound(gameRoomData.players);
+
+                 // Create the first round
+                const gameRound = await admin.firestore()
+                    .doc(`${GAME_ROOM_COLLECTION}/${gameRoomData.roomCode}`)
+                    .collection(GAME_ROUND_COLLECTION)
+                    .add(firstRound);
+
+
+                // create a hands sub collections
+                // @ts-ignore
+                for (const hand of hands) {
+                    await admin.firestore()
+                        .doc(`${GAME_ROOM_COLLECTION}/${gameRoomData.roomCode}/${GAME_ROUND_COLLECTION}/${gameRound.id}`)
+                        .collection(HANDS_COLLECTIONS)
+                        .add(hand);
                 }
 
-                console.log("sending notification to users", tokens, payload);
-                return notifyUsers(tokens, payload)
-                    .then(devicesResponse => {
-                        console.log("Users notified of game ready", devicesResponse);
-                    })
-                    .catch(error => {
-                        console.log("Failed to notify users about game ready", error);
-                    })
-            }
-        }
-        return null
-    });
+                // Update the game room
+                gameRoomData.gameStarted = true;
+                gameRoomData.currentRound = gameRound.id;
+                gameRoomData.roundNumber = 1;
+                await admin.firestore().doc(`Game/${gameRoomData.roomCode}`).update(gameRoomData);
 
+            } catch (e) {
+                //TODO handle case where the game started flag failed to set.
+                console.error("Unable to update game room started flag", e)
+            }
+
+            console.log("sending notification to users", tokens, payload);
+            return notifyUsers(tokens, payload)
+                .then(devicesResponse => {
+                    console.log("Users notified of game ready", devicesResponse);
+                })
+                .catch(error => {
+                    console.error("Failed to notify users about game ready", error);
+                })
+        }
+    }
+    return null
+});
 
 function notifyUsers(userTokens: string[], messagePayload: object) {
     return admin.messaging().sendToDevice(userTokens, messagePayload)
@@ -124,7 +160,11 @@ async function getUsersTokens(userIds: string[]) {
     return Promise.resolve(tokens)
 }
 
-async function createGame(players: Array<string>) {
+/**
+ * Creates a new round in a game.
+ * @param players
+ */
+async function createRound(players: Array<any>) {
     let hands: any[];
     let deck = createDeck();
     const round = 1;
@@ -137,9 +177,7 @@ async function createGame(players: Array<string>) {
 
     const trump = deck.pop();
 
-
-    // Create the match
-    return {
+    const gameRound = {
         gameRound: round,
         theTrump: trump,
         scoreLog: "",
@@ -147,15 +185,16 @@ async function createGame(players: Array<string>) {
         players: players,
         pots: [],
         deck: deck,
-        hands: hands
     };
+
+    return [gameRound, hands]
 }
 
 function createDeck() {
     const cardData = {
         //ranks: ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'],
         // suits: ['♥', '♦', '♠', '♣'],
-        ranks: ["A","TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "J", "Q", "K"],
+        ranks: ["A", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "J", "Q", "K"],
         suits: ['HEART', 'DIAMOND', 'SPADE', 'CLUB'],
     };
     let id = 1;
