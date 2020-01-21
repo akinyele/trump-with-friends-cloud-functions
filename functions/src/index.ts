@@ -54,10 +54,12 @@ export const testFunction = functions.https.onRequest(async (request, response) 
 });
 
 /**
- * Checks to see if the game room is full then creates the game room notify the users.
- * TODO change function to on game room update
- */
-export const onGamesUpdated = functions.firestore.document('Game/{gameId}').onUpdate(async change => {
+ * Cloud function that triggers when game room is updated and does following:
+ * 1. Checks if game is ready. ie if all the users have joined.
+ * 2. Create the first round of the game.
+ * 2. Notify the user's when the game is ready.
+*/
+export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').onUpdate(async change => {
     const gameRoomData = change.after.data();
 
     let isRoomFull = false;
@@ -130,6 +132,45 @@ export const onGamesUpdated = functions.firestore.document('Game/{gameId}').onUp
     return null
 });
 
+/**
+ * Cloud function that triggers whenever a game round is updated.
+ * The main checks for this triggers are:
+ * 1. Check to see if bids are finished.
+ * 2. Check to see if everyone has played in pot.
+ * 3. Check to see if the rounds has finish.
+ * 4. Determine the scores for the round and add it to the room.
+ */
+export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAME_ROUND_COLLECTION}/{roundId}`)
+    .onUpdate( change => {
+
+        // check the current state of the game
+        // NB first state is bidding
+
+        // bidding state
+        // - check to see if all the players have bid
+        // - create first pot (the order determines who plays first)
+
+
+        // playing state
+        // - check everyone play in the first pot
+        // - winner is determined
+        // - check if still playing
+        // - move on to next pot
+
+
+        // Tallying
+        // - calculate scores
+
+
+        // End
+        // - create next round
+
+
+        return ""
+    });
+
+//----- Helper Functions
+
 function notifyUsers(userTokens: string[], messagePayload: object) {
     return admin.messaging().sendToDevice(userTokens, messagePayload)
 }
@@ -192,9 +233,9 @@ async function createRound(players: Array<any>) {
 
 function createDeck() {
     const cardData = {
-        //ranks: ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'],
+        // ranks: ["A", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "J", "Q", "K"],
         // suits: ['♥', '♦', '♠', '♣'],
-        ranks: ["A", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "J", "Q", "K"],
+        ranks: ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'],
         suits: ['HEART', 'DIAMOND', 'SPADE', 'CLUB'],
     };
     let id = 1;
@@ -218,14 +259,14 @@ function createDeck() {
 
 function shuffleCards(cards: Array<Object>) {
     // Fisher-Yates algorithm
+    // https://gamedevelopment.tutsplus.com/tutorials/quick-tip-shuffle-cards-or-any-elements-with-the-fisher-yates-shuffle-algorithm--gamedev-6314
     for (let i = cards.length; i < 0; i++) {
         const randomPos = Math.floor(Math.random() * i);
         const temp = cards[i];
         cards[i] = cards[randomPos];
         cards[randomPos] = temp;
     }
-    return cards
-}
+ }
 
 function shareCards(players: Array<string>, deck: Array<Object>, round: number): Array<any> {
 
