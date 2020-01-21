@@ -257,7 +257,7 @@ function createDeck() {
     return cards;
 }
 
-function shuffleCards(cards: Array<Object>) {
+function shuffleCards(cards: Array<Object>) : Array<Object>{
     // Fisher-Yates algorithm
     // https://gamedevelopment.tutsplus.com/tutorials/quick-tip-shuffle-cards-or-any-elements-with-the-fisher-yates-shuffle-algorithm--gamedev-6314
     for (let i = cards.length; i < 0; i++) {
@@ -266,6 +266,8 @@ function shuffleCards(cards: Array<Object>) {
         cards[i] = cards[randomPos];
         cards[randomPos] = temp;
     }
+
+    return cards;
  }
 
 function shareCards(players: Array<string>, deck: Array<Object>, round: number): Array<any> {
