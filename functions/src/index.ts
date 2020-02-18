@@ -89,35 +89,31 @@ export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').o
                 data: {...messageData.data}
             };
 
-            try {
-                const [firstRound, hands] =  await createRound(gameRoomData.players);
+            const [firstRound, hands] =  await createRound(gameRoomData.players);
 
-                 // Create the first round
-                const gameRound = await admin.firestore()
-                    .doc(`${GAME_ROOM_COLLECTION}/${gameRoomData.roomCode}`)
-                    .collection(GAME_ROUND_COLLECTION)
-                    .add(firstRound);
+            // Create the first round
+            const gameRound = await admin.firestore()
+                .doc(`${GAME_ROOM_COLLECTION}/${gameRoomData.roomCode}`)
+                .collection(GAME_ROUND_COLLECTION)
+                .add(firstRound);
 
 
-                // create a hands sub collections
-                // @ts-ignore
-                for (const hand of hands) {
-                    await admin.firestore()
-                        .doc(`${GAME_ROOM_COLLECTION}/${gameRoomData.roomCode}/${GAME_ROUND_COLLECTION}/${gameRound.id}`)
-                        .collection(HANDS_COLLECTIONS)
-                        .add(hand);
-                }
-
-                // Update the game room
-                gameRoomData.gameStarted = true;
-                gameRoomData.currentRound = gameRound.id;
-                gameRoomData.roundNumber = 1;
-                await admin.firestore().doc(`Game/${gameRoomData.roomCode}`).update(gameRoomData);
-
-            } catch (e) {
-                //TODO handle case where the game started flag failed to set.
-                console.error("Unable to update game room started flag", e)
+            // create a hands sub collections
+            // @ts-ignore
+            for (const hand of hands) {
+                await admin.firestore()
+                    .doc(`${GAME_ROOM_COLLECTION}/${gameRoomData.roomCode}/${GAME_ROUND_COLLECTION}/${gameRound.id}`)
+                    .collection(HANDS_COLLECTIONS)
+                    .add(hand);
             }
+
+            // Update the game room
+            gameRoomData.gameStarted = true;
+            gameRoomData.currentRound = gameRound.id;
+            gameRoomData.roundNumber = 1;
+            await admin.firestore().doc(`Game/${gameRoomData.roomCode}`).update(gameRoomData);
+
+
 
             console.log("sending notification to users", tokens, payload);
             return notifyUsers(tokens, payload)
