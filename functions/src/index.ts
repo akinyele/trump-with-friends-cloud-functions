@@ -229,9 +229,9 @@ async function createRound(players: Array<any>) {
 
 function createDeck() {
     const cardData = {
-        // ranks: ["A", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "J", "Q", "K"],
+        ranks: ["A", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "J", "Q", "K"],
         // suits: ['♥', '♦', '♠', '♣'],
-        ranks: ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'],
+        // ranks: ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'],
         suits: ['HEART', 'DIAMOND', 'SPADE', 'CLUB'],
     };
     let id = 1;
