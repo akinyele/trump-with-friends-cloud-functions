@@ -1,11 +1,13 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import {DocumentSnapshot} from "firebase-functions/lib/providers/firestore";
+import {GameRoundStates} from "./service/GameRound/GameRound";
 
 const USER_COLLECTION: string = "User";
 const GAME_ROOM_COLLECTION: string = "Game";
 const GAME_ROUND_COLLECTION: string = "Rounds";
 const HANDS_COLLECTIONS: string = "Hands";
+const BIDS_COLLECTIONS: string = "Bids";
 
 
 /**
@@ -137,38 +139,92 @@ export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').o
  * 4. Determine the scores for the round and add it to the room.
  */
 export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAME_ROUND_COLLECTION}/{roundId}`)
-    .onUpdate( change => {
+    .onUpdate( async (change, context) => {
+
+        const gameRound = change.after.data();
+        if (!gameRound) {
+            console.error("Failed to parse game rounds change", gameRound);
+            return;
+        }
+
+        const  ROUND_CURRENT_STATE = gameRound.state;
+        const {gameId, roundId} = context.params;
+
+
 
         // check the current state of the game
         // NB first state is bidding
+        switch (ROUND_CURRENT_STATE) {
+            case GameRoundStates.BIDDING: {
+                // bidding state
 
-        // bidding state
-        // - check to see if all the players have bid
-        // - create first pot (the order determines who plays first)
+                // Get the bids
+                const bidsSnapshot = await admin.firestore()
+                    .collection(GAME_ROOM_COLLECTION)
+                    .doc()
+                    .collection(GAME_ROUND_COLLECTION)
+                    .doc()
+                    .collection(BIDS_COLLECTIONS)
+                    .get();
 
+                const bidsCollection = bidsSnapshot.docs.map( snapshot =>
+                    ({...snapshot.data()})
+                );
 
-        // playing state
-        // - check everyone play in the first pot
-        // - winner is determined
-        // - check if still playing
-        // - move on to next pot
+                const players = gameRound.players;
 
+                // - check to see if all the players have bid
+                const allBids = players.length === bidsCollection.length;
 
-        // Tallying
-        // - calculate scores
+                // - create first pot (the order determines who plays first)
+                if (allBids) {
+                    // update game round to next state;
+                    gameRound.state = GameRoundStates.PLAYING
+                }
 
+                break;
+            }
 
-        // End
-        // - create next round
+            case GameRoundStates.PLAYING: {
+                // playing state
+                // - check everyone play in the first pot
+                // - winner is determined
+                // - check if still playing
+                // - move on to next pot
+                break;
+            }
+            case GameRoundStates.TALLYING: {
+                // Tallying
+                // - calculate scores
+                break;
+            }
+            case GameRoundStates.FINISHED: {
+                // End
+                // - create next round
+                break;
+            }
+            default: {
+                console.log("Game is in undefined state");
+                return Promise.reject()
+            }
+        }
 
-
-        return ""
+        return updateGameRound(gameId, roundId, gameRound)
     });
 
 //----- Helper Functions
 
 function notifyUsers(userTokens: string[], messagePayload: object) {
     return admin.messaging().sendToDevice(userTokens, messagePayload)
+}
+
+function updateGameRound(roomId: string, roundId: string, updatedGameRound: Object) {
+    return admin.firestore()
+        .collection(GAME_ROOM_COLLECTION)
+        .doc(roomId)
+        .collection(GAME_ROUND_COLLECTION)
+        .doc(roundId)
+        .update(updatedGameRound);
 }
 
 async function getUser(userId: string): Promise<DocumentSnapshot> {
@@ -215,7 +271,9 @@ async function createRound(players: Array<any>) {
     const trump = deck.pop();
 
     const gameRound = {
+        id: "",
         gameRound: round,
+        roundState: GameRoundStates.BIDDING,
         theTrump: trump,
         scoreLog: "",
         bids: Array(),
