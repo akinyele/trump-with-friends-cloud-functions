@@ -12,9 +12,10 @@ const BIDS_COLLECTIONS: string = "Bids";
 
 /**
  *
- * TODO's Change the structure so that olny the respective user can see their hand.
- * Create a hands' sub collection that store the current hands for the user. Use the user id as the key so that
- * only the user can draw their hand.
+ * TODO Change the structure so that olny the respective user can see their hand.
+ * TODO Create a hands' sub collection that store the current hands for the user. Use the user id as the key so that only the user can draw their hand.
+ *
+ * TODO: start logging function so that we can debug from firebase console.
  *
  */
 
@@ -154,16 +155,17 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
 
         // check the current state of the game
         // NB first state is bidding
-        switch (ROUND_CURRENT_STATE) {
+        switch (GameRoundStates[ROUND_CURRENT_STATE]) {
             case GameRoundStates.BIDDING: {
+                console.log("Game in bidding state");
                 // bidding state
 
                 // Get the bids
                 const bidsSnapshot = await admin.firestore()
                     .collection(GAME_ROOM_COLLECTION)
-                    .doc()
+                    .doc(gameId)
                     .collection(GAME_ROUND_COLLECTION)
-                    .doc()
+                    .doc(roundId)
                     .collection(BIDS_COLLECTIONS)
                     .get();
 
@@ -171,20 +173,26 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
                     ({...snapshot.data()})
                 );
 
+                console.log(`bids: ${bidsCollection}`);
+
                 const players = gameRound.players;
 
                 // - check to see if all the players have bid
-                const allBids = players.length === bidsCollection.length;
+                const bidsLeft = players.length - bidsCollection.length;
 
                 // - create first pot (the order determines who plays first)
-                if (allBids) {
+                if (!bidsLeft) {
                     // update game round to next state;
-                    gameRound.state = GameRoundStates.PLAYING
+                    const newState =  GameRoundStates.PLAYING;
+                    gameRound.state = newState;
+                    console.log(`all bids have been set, setting game state to ${newState}`);
+                } else {
+                    console.log(`${bidsLeft} players left to set bid`);
+                    return Promise.reject()
                 }
 
                 break;
             }
-
             case GameRoundStates.PLAYING: {
                 // playing state
                 // - check everyone play in the first pot
@@ -204,8 +212,8 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
                 break;
             }
             default: {
-                console.log("Game is in undefined state");
-                return Promise.reject()
+                console.log(`Game is unrecognized state : ${ROUND_CURRENT_STATE}`);
+                return Promise.reject(`Game is unrecognized state : ${ROUND_CURRENT_STATE}`)
             }
         }
 
@@ -224,7 +232,10 @@ function updateGameRound(roomId: string, roundId: string, updatedGameRound: Obje
         .doc(roomId)
         .collection(GAME_ROUND_COLLECTION)
         .doc(roundId)
-        .update(updatedGameRound);
+        .update(updatedGameRound)
+        .then( result => {
+            console.log(" Game Round updated")
+        })
 }
 
 async function getUser(userId: string): Promise<DocumentSnapshot> {
