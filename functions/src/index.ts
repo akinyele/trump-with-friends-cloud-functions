@@ -1,7 +1,13 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import {DocumentSnapshot} from "firebase-functions/lib/providers/firestore";
-import {GameRoundStates} from "./service/GameRound/GameRound";
+import {
+    createRound,
+} from "./service/GameRound/GameRound";
+import {
+    GameRoundStates
+} from "./data/GameRound"
+import {GameRoom} from "./data/GameRoom";
 
 const USER_COLLECTION: string = "User";
 const GAME_ROOM_COLLECTION: string = "Game";
@@ -63,7 +69,7 @@ export const testFunction = functions.https.onRequest(async (request, response) 
  * 2. Notify the user's when the game is ready.
 */
 export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').onUpdate(async change => {
-    const gameRoomData = change.after.data();
+    const gameRoomData : GameRoom= change.after.data() ;
 
     let isRoomFull = false;
 
@@ -71,9 +77,9 @@ export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').o
     console.log("game room updated", gameRoomData);
 
     if (gameRoomData) {
-        isRoomFull = gameRoomData.playerAmount.toString() === gameRoomData.players.length.toString();
+        isRoomFull = gameRoomData.maxPlayers.toString() === gameRoomData.players.length.toString();
 
-        if (isRoomFull && !gameRoomData.gameStarted) {
+        if (isRoomFull && !gameRoomData.isStarted) {
             console.log("game room full notify user");
             const tokens: string[] = await getUsersTokens(gameRoomData.players);
 
@@ -111,9 +117,9 @@ export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').o
             }
 
             // Update the game room
-            gameRoomData.gameStarted = true;
-            gameRoomData.currentRound = gameRound.id;
-            gameRoomData.roundNumber = 1;
+            gameRoomData.isStarted = true;
+            gameRoomData.roundId = gameRound.id;
+            gameRoomData.roundId = 1;
             await admin.firestore().doc(`Game/${gameRoomData.roomCode}`).update(gameRoomData);
 
 
@@ -195,7 +201,28 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
             }
             case GameRoundStates.PLAYING: {
                 // playing state
+
+                const players = gameRound.players;
+                const currentPot = gameRound.pot;
+                let previousPot = gameRound.previousPots;
+
                 // - check everyone play in the first pot
+                for (let i = 0; i < players; i++) {
+                    const player = players[i];
+                    if (!currentPot[player]) { // if user hasn't played in pot yet then
+                        console.log(`${i + 1} player/s still left to play`);
+                        return Promise.reject();
+                    }
+                }
+
+                console.log("All players have played in this pot, getting the winner.");
+                //const emptyPot = {};
+
+
+
+                currentPot.winner =
+                previousPot = [...previousPot, currentPot];
+
                 // - winner is determined
                 // - check if still playing
                 // - move on to next pot
@@ -222,11 +249,11 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
 
 //----- Helper Functions
 
-function notifyUsers(userTokens: string[], messagePayload: object) {
+function notifyUsers(userTokens: string[], messagePayload: object): Promise<any> {
     return admin.messaging().sendToDevice(userTokens, messagePayload)
 }
 
-function updateGameRound(roomId: string, roundId: string, updatedGameRound: Object) {
+function updateGameRound(roomId: string, roundId: string, updatedGameRound: Object): Promise<any> {
     return admin.firestore()
         .collection(GAME_ROOM_COLLECTION)
         .doc(roomId)
@@ -262,105 +289,4 @@ async function getUsersTokens(userIds: string[]) {
     }
 
     return Promise.resolve(tokens)
-}
-
-/**
- * Creates a new round in a game.
- * @param players
- */
-async function createRound(players: Array<any>) {
-    let hands: any[];
-    let deck = createDeck();
-    const round = 1;
-
-    // shuffle the deck
-    deck = shuffleCards(deck);
-
-    // share the cards
-    [deck, hands] = shareCards(players, deck, round);
-
-    const trump = deck.pop();
-
-    const gameRound = {
-        id: "",
-        gameRound: round,
-        roundState: GameRoundStates.BIDDING,
-        theTrump: trump,
-        scoreLog: "",
-        bids: Array(),
-        players: players,
-        pots: [],
-        deck: deck,
-    };
-
-    return [gameRound, hands]
-}
-
-function createDeck() {
-    const cardData = {
-        ranks: ["A", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "J", "Q", "K"],
-        // suits: ['♥', '♦', '♠', '♣'],
-        // ranks: ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'],
-        suits: ['HEART', 'DIAMOND', 'SPADE', 'CLUB'],
-    };
-    let id = 1;
-    const cards = Array<object>();
-
-    // tslint:disable-next-line:prefer-for-of
-    for (let s = 0; s < cardData.suits.length; s++) {
-        for (let r = 0; r < cardData.ranks.length; r++) {
-            const card = {
-                id: id,
-                suite: cardData.suits[s],
-                rank: cardData.ranks[r]
-            };
-            cards.push(card);
-            id++;
-        }
-    }
-
-    return cards;
-}
-
-function shuffleCards(cards: Array<Object>) : Array<Object>{
-    // Fisher-Yates algorithm
-    // https://gamedevelopment.tutsplus.com/tutorials/quick-tip-shuffle-cards-or-any-elements-with-the-fisher-yates-shuffle-algorithm--gamedev-6314
-    for (let i = cards.length; i < 0; i++) {
-        const randomPos = Math.floor(Math.random() * i);
-        const temp = cards[i];
-        cards[i] = cards[randomPos];
-        cards[randomPos] = temp;
-    }
-
-    return cards;
- }
-
-function shareCards(players: Array<string>, deck: Array<Object>, round: number): Array<any> {
-
-    const numPlayers = players.length;
-    const numCards = deck.length;
-    const hands = Array<object>();
-
-    // create empty hands
-    for (let p = 0; p < numPlayers; p++) {
-        const hand = {
-            playerId: players[p],
-            cards: []
-        };
-        hands.push(hand);
-    }
-
-    // determine amount to share.
-    const maxAmntToShare = (numCards % numPlayers > 0) ? Math.floor(numCards / numPlayers) : (Math.floor(numCards / numPlayers) - 1);
-    let numToShare = maxAmntToShare - (round - 1);
-    if (numToShare <= 1) numToShare = 2; // amount to share should never be less than 2.
-
-    // issue cards
-    for (let i = 0; i < numToShare; i++) {
-        for (const hand of hands) {
-            // @ts-ignore
-            hand.cards.push(deck.pop())
-        }
-    }
-    return [deck, hands]
 }
