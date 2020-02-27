@@ -139,12 +139,15 @@ export async function createRound(players: Array<any>) {
     [deck, hands] = shareCards(players, deck, round);
 
     const trump = deck.pop();
+    if (!trump) {
+        console.log("failed to get trump");
+        return [];
+    }
 
     const gameRound : GameRound = {
         id: "",
         number: round,
         state: GameRoundStates.BIDDING,
-        // @ts-ignore
         theTrump: trump,
         userPots: {},
         bids: {},
@@ -152,6 +155,7 @@ export async function createRound(players: Array<any>) {
         pot: {},
         deck: deck,
         previousPots: [],
+        numberOfPots: hands.length,
         startingPlayer: players[0]
     };
 
