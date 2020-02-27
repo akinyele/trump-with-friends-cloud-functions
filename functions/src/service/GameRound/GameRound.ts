@@ -5,41 +5,60 @@ import {GameRound, GameRoundStates} from "../../data/GameRound";
 /**
  *
  * @param plays
+ * @param startingCard
  * @param trump
  */
-export function getWinner(plays: Map<string, Card>, trump: Card): string {
-    return ""
+export function getWinner(plays: Map<string, Card>, startingCard: Card, trump: Card): string {
+
+    const players = plays.keys();
+    let winner: string = "";
+    let winningCard: Card = startingCard;
+
+    for (const player of players) {
+        const playerCard = plays.get(player);
+
+        if (playerCard === undefined) continue;
+        if (isGreaterCard( winningCard, playerCard, trump)) continue;
+
+        winningCard = playerCard;
+        winner = player
+    }
+
+    return winner
 }
 
 function isSameSuite(card1: Card, card2: Card): boolean {
     return card1.suite === card2.suite;
 }
 
+/**
+ * @param card1
+ * @param card2
+ */
 function isGreaterRank(card1: Card, card2: Card): boolean {
-    return card1.rank > card2.rank;
+    const rank1 = isNaN(card1.rank) ? +Rank[card1.rank] : card1.rank;
+    const rank2 = isNaN(card2.rank) ? +Rank[card2.rank] : card2.rank;
+
+    return rank1 > rank2;
 }
 
 /**
+ * Used determine is a card is greater than another.
  *
- * @param card1
+ * A card is greater when:
+ *  1 - they are the same suite and the rank is greater.
+ *  2 - they are different ranks and the other card is not a trump. (only when another card is trump can it be greater)
+ *
+ * @param card1 - card being
  * @param card2
  * @param trumpCard: The cards that acts as the trump for this round.
+ * @return returns true if @card1 is greater than @card2
  */
 export function isGreaterCard(card1: Card, card2: Card, trumpCard: Card): boolean {
-
-    const TRUMP = trumpCard.suite;
-
-    const isBothTrump = card1.suite === TRUMP && card2.suite === TRUMP;
-    if (isBothTrump) return isGreaterRank(card1, card2);
-
+    // check is same suite and find greater
     if (isSameSuite(card1, card2)) return isGreaterRank(card1, card2);
-
-
-
-
-    isGreaterRank(card1, card2);
-
-    return false;
+    // check if card2 is trump
+    else return !isSameSuite(card2, trumpCard);
 }
 
 export function createDeck(): Array<Card> {
@@ -125,9 +144,10 @@ export async function createRound(players: Array<any>) {
         id: "",
         number: round,
         state: GameRoundStates.BIDDING,
+        // @ts-ignore
         theTrump: trump,
-        userPots: [],
-        bids: Array(),
+        userPots: {},
+        bids: {},
         players: players,
         pot: {},
         deck: deck,

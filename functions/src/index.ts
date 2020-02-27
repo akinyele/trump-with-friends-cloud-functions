@@ -2,18 +2,18 @@ import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import {DocumentSnapshot} from "firebase-functions/lib/providers/firestore";
 import {
-    createRound,
+    createRound, getWinner,
 } from "./service/GameRound/GameRound";
 import {
+    GameRound,
     GameRoundStates
 } from "./data/GameRound"
-import {GameRoom} from "./data/GameRoom";
+import {Card} from "./data/Card";
 
 const USER_COLLECTION: string = "User";
 const GAME_ROOM_COLLECTION: string = "Game";
 const GAME_ROUND_COLLECTION: string = "Rounds";
 const HANDS_COLLECTIONS: string = "Hands";
-const BIDS_COLLECTIONS: string = "Bids";
 
 
 /**
@@ -69,17 +69,15 @@ export const testFunction = functions.https.onRequest(async (request, response) 
  * 2. Notify the user's when the game is ready.
 */
 export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').onUpdate(async change => {
-    const gameRoomData : GameRoom= change.after.data() ;
-
-    let isRoomFull = false;
+    const gameRoomData = change.after.data() ;
 
     // Check to see if the game room is full
     console.log("game room updated", gameRoomData);
 
     if (gameRoomData) {
-        isRoomFull = gameRoomData.maxPlayers.toString() === gameRoomData.players.length.toString();
+        const playerLeft = gameRoomData.maxPlayers - gameRoomData.players.length;
 
-        if (isRoomFull && !gameRoomData.isStarted) {
+        if (!playerLeft && !gameRoomData.isStarted) {
             console.log("game room full notify user");
             const tokens: string[] = await getUsersTokens(gameRoomData.players);
 
@@ -119,7 +117,7 @@ export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').o
             // Update the game room
             gameRoomData.isStarted = true;
             gameRoomData.roundId = gameRound.id;
-            gameRoomData.roundId = 1;
+            gameRoomData.round = 1;
             await admin.firestore().doc(`Game/${gameRoomData.roomCode}`).update(gameRoomData);
 
 
@@ -132,6 +130,10 @@ export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').o
                 .catch(error => {
                     console.error("Failed to notify users about game ready", error);
                 })
+        }
+        else{
+            console.log(`${playerLeft} players left to join`);
+            return Promise.reject();
         }
     }
     return null
@@ -148,15 +150,30 @@ export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').o
 export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAME_ROUND_COLLECTION}/{roundId}`)
     .onUpdate( async (change, context) => {
 
-        const gameRound = change.after.data();
-        if (!gameRound) {
-            console.error("Failed to parse game rounds change", gameRound);
+        const data =  change.after.data();
+        if (!data) {
+            console.error("Failed to parse game rounds change", data);
             return;
         }
 
+        let  gameRound: GameRound = {
+            id: data.id,
+            bids: data.bids,
+            players: data.players,
+            deck: data.deck,
+            number: data.number,
+            startingPlayer: data.startingPlayer,
+            state: data.state,
+            theTrump: data.theTrump,
+            pot: data.pot,
+            previousPots: data.previousPots,
+            userPots: data.userPots,
+        };
+
+
+
         const  ROUND_CURRENT_STATE = gameRound.state;
         const {gameId, roundId} = context.params;
-
 
 
         // check the current state of the game
@@ -167,7 +184,7 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
                 // bidding state
 
                 // Get the bids
-                const bidsSnapshot = await admin.firestore()
+                /*const bidsSnapshot = await admin.firestore()
                     .collection(GAME_ROOM_COLLECTION)
                     .doc(gameId)
                     .collection(GAME_ROUND_COLLECTION)
@@ -177,14 +194,16 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
 
                 const bidsCollection = bidsSnapshot.docs.map( snapshot =>
                     ({...snapshot.data()})
-                );
+                );*/
 
-                console.log(`bids: ${bidsCollection}`);
+                const bids = gameRound.bids;
+
+                console.log(`bids: ${bids}`);
 
                 const players = gameRound.players;
 
                 // - check to see if all the players have bid
-                const bidsLeft = players.length - bidsCollection.length;
+                const bidsLeft = players.length - Object.keys(bids).length;
 
                 // - create first pot (the order determines who plays first)
                 if (!bidsLeft) {
@@ -201,31 +220,82 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
             }
             case GameRoundStates.PLAYING: {
                 // playing state
+                console.log("Game is in playing state");
 
                 const players = gameRound.players;
-                const currentPot = gameRound.pot;
-                let previousPot = gameRound.previousPots;
+                const pot = gameRound.pot;
+                const trump = gameRound.theTrump;
+                let previousPots = gameRound.previousPots;
+                const userPots = gameRound.userPots;
+                const startingPlayer = gameRound.startingPlayer;
+
+
 
                 // - check everyone play in the first pot
-                for (let i = 0; i < players; i++) {
-                    const player = players[i];
-                    if (!currentPot[player]) { // if user hasn't played in pot yet then
-                        console.log(`${i + 1} player/s still left to play`);
+                console.log("checking to see if all players played in this pot");
+                const amntPlayed = Object.keys(pot).length;
+                const numPlayers = players.length;
+
+
+                for (const player of players) {
+                    if (!pot[player]) { // if user hasn't played in pot yet then stop.
+                        console.log(`${numPlayers - amntPlayed} player/s still left to play`);
                         return Promise.reject();
                     }
                 }
 
+                /**
+                 *  Getting the first play in the pot.
+                 *  the person who plays first in a pot is determined by;
+                 *  the winner of the last pot or whoever is starting the round.
+                 */
+                let startingCard;
+                if (!previousPots.length)  startingCard = pot[startingPlayer];
+                else startingCard = pot[previousPots[0].winner];
+
+                if (startingCard === undefined) {
+                    console.log("Failed to get the first card in the pot");
+                    return Promise.reject();
+                }
+
+
+                // get winner for the pot
                 console.log("All players have played in this pot, getting the winner.");
-                //const emptyPot = {};
+                const potWinner = getWinner(new Map<string, Card>(Object.entries(pot)),  startingCard, trump);
+
+                if (!potWinner) {
+                    console.log("Failed to get winner");
+                    return Promise.reject();
+                }
+
+                console.log(`${potWinner} won this pot`);
 
 
+                // add pot to user pots
+                if (!userPots[potWinner]) userPots[potWinner] = [pot];
+                else userPots[potWinner] = [...userPots[potWinner], pot];
 
-                currentPot.winner =
-                previousPot = [...previousPot, currentPot];
 
-                // - winner is determined
+                const prevPot = {...pot, winner: potWinner};
+                previousPots = [prevPot, ...previousPots]; // add last pot to the start of the array
+
+
                 // - check if still playing
                 // - move on to next pot
+                gameRound = {
+                    id: gameRound.id,
+                    bids: gameRound.bids,
+                    players: gameRound.players,
+                    deck: gameRound.deck, number: gameRound.number,
+                    startingPlayer: gameRound.startingPlayer,
+                    state: gameRound.state,
+                    theTrump: gameRound.theTrump,
+                    // updated fields
+                    pot: {},
+                    previousPots,
+                    userPots
+                };
+
                 break;
             }
             case GameRoundStates.TALLYING: {
@@ -244,6 +314,7 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
             }
         }
 
+
         return updateGameRound(gameId, roundId, gameRound)
     });
 
@@ -253,14 +324,17 @@ function notifyUsers(userTokens: string[], messagePayload: object): Promise<any>
     return admin.messaging().sendToDevice(userTokens, messagePayload)
 }
 
-function updateGameRound(roomId: string, roundId: string, updatedGameRound: Object): Promise<any> {
+function updateGameRound(roomId: string, roundId: string, updatedGameRound: GameRound): Promise<any> {
+    console.log("updating game room");
+    console.log(updatedGameRound);
+
     return admin.firestore()
         .collection(GAME_ROOM_COLLECTION)
         .doc(roomId)
         .collection(GAME_ROUND_COLLECTION)
         .doc(roundId)
         .update(updatedGameRound)
-        .then( result => {
+        .then( _ => {
             console.log(" Game Round updated")
         })
 }

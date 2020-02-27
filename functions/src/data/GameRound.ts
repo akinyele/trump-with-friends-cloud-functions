@@ -1,16 +1,18 @@
 /**
  *
  **/
+import {Card} from "./Card";
+
 export interface GameRound {
     id: string,
     number: number,
     state: GameRoundStates,
-    theTrump: any,
+    theTrump: Card,
     deck: Array<any>,
-    bids: object,
-    pot: object,
-    userPots: object
-    previousPots: Array<object>,
+    bids: any,
+    pot: any,
+    userPots: any
+    previousPots: Array<any>,
     players: Array<string>,
     startingPlayer: string
 }
