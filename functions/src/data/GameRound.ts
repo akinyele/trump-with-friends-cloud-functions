@@ -15,6 +15,7 @@ export interface GameRound {
     numberOfPots: number,
     previousPots: Array<any>,
     players: Array<string>,
+    amountToDeal: number
     startingPlayer: string
 }
 
