@@ -1,13 +1,8 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import {DocumentSnapshot} from "firebase-functions/lib/providers/firestore";
-import {
-    createRound, getWinner,
-} from "./service/GameRound/GameRound";
-import {
-    GameRound,
-    GameRoundStates
-} from "./data/GameRound"
+import {createRound, getMaxAmountOfCardsToDeal, getWinner,} from "./service/GameRound/GameRound";
+import {GameRound, GameRoundStates} from "./data/GameRound"
 import {Card} from "./data/Card";
 
 const USER_COLLECTION: string = "User";
@@ -53,11 +48,8 @@ export const getGames = functions.https.onRequest((request, response) => {
 
 export const testFunction = functions.https.onRequest(async (request, response) => {
     const body = request.body;
-    const trumpGame = await createRound(body.players);
+    const trumpGame = await createRound(body.players, 1, 12);
 
-
-    // const hello = await admin.firestore().doc(`Game/OkrWZPznW`).collection("Rounds").add({hello: "hello"});
-    // console.log("Hellloooo", hello);
 
     response.send(trumpGame);
 });
@@ -96,7 +88,9 @@ export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').o
                 data: {...messageData.data}
             };
 
-            const [firstRound, hands] =  await createRound(gameRoomData.players);
+            const CARDS_IN_DECK = 52;
+            const amountToDeal  = getMaxAmountOfCardsToDeal(gameRoomData.players.length, CARDS_IN_DECK);
+            const [firstRound, hands] =  await createRound(gameRoomData.players, 1, amountToDeal);
 
             // Create the first round
             const gameRound = await admin.firestore()
@@ -156,7 +150,8 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
             return;
         }
 
-        let  gameRound: GameRound = {
+        const gameRound: GameRound = {
+            amountToDeal: data.amountToDeal,
             id: data.id,
             bids: data.bids,
             players: data.players,
@@ -168,6 +163,7 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
             pot: data.pot,
             previousPots: data.previousPots,
             userPots: data.userPots,
+            numberOfPots: data.numberOfPots
         };
 
 
@@ -180,26 +176,11 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
         // NB first state is bidding
         switch (GameRoundStates[ROUND_CURRENT_STATE]) {
             case GameRoundStates.BIDDING: {
-                console.log("Game in bidding state");
                 // bidding state
-
-                // Get the bids
-                /*const bidsSnapshot = await admin.firestore()
-                    .collection(GAME_ROOM_COLLECTION)
-                    .doc(gameId)
-                    .collection(GAME_ROUND_COLLECTION)
-                    .doc(roundId)
-                    .collection(BIDS_COLLECTIONS)
-                    .get();
-
-                const bidsCollection = bidsSnapshot.docs.map( snapshot =>
-                    ({...snapshot.data()})
-                );*/
+                console.log("Game in bidding state");
 
                 const bids = gameRound.bids;
-
                 console.log(`bids: ${bids}`);
-
                 const players = gameRound.players;
 
                 // - check to see if all the players have bid
@@ -222,12 +203,8 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
                 // playing state
                 console.log("Game is in playing state");
 
-                const players = gameRound.players;
-                const pot = gameRound.pot;
-                const trump = gameRound.theTrump;
-                let previousPots = gameRound.previousPots;
-                const userPots = gameRound.userPots;
-                const startingPlayer = gameRound.startingPlayer;
+                const {players, pot, theTrump, userPots, startingPlayer, numberOfPots} = gameRound;
+                let {previousPots} = gameRound;
 
 
 
@@ -261,7 +238,7 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
 
                 // get winner for the pot
                 console.log("All players have played in this pot, getting the winner.");
-                const potWinner = getWinner(new Map<string, Card>(Object.entries(pot)),  startingCard, trump);
+                const potWinner = getWinner(new Map<string, Card>(Object.entries(pot)),  startingCard, theTrump);
 
                 if (!potWinner) {
                     console.log("Failed to get winner");
@@ -280,32 +257,37 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
                 previousPots = [prevPot, ...previousPots]; // add last pot to the start of the array
 
 
+                const potsPlayedInRounds = previousPots.length;
+                let state = gameRound.state;
+
                 // - check if still playing
-                // - move on to next pot
-                gameRound = {
-                    id: gameRound.id,
-                    bids: gameRound.bids,
-                    players: gameRound.players,
-                    deck: gameRound.deck, number: gameRound.number,
-                    startingPlayer: gameRound.startingPlayer,
-                    state: gameRound.state,
-                    theTrump: gameRound.theTrump,
-                    // updated fields
+                if (potsPlayedInRounds === numberOfPots) {
+                    console.log("All the pots have been played in the rounds.");
+
+                    // TODO calculate scores
+                    //  update game room.
+                    state = GameRoundStates.FINISHED;
+                }
+
+                return updateGameRound(gameId, roundId, {
                     pot: {},
+                    state,
                     previousPots,
                     userPots
-                };
-
-                break;
+                });
             }
             case GameRoundStates.TALLYING: {
                 // Tallying
                 // - calculate scores
+
                 break;
             }
             case GameRoundStates.FINISHED: {
                 // End
                 // - create next round
+
+                // const {players} = gameRound= createRound(players);
+
                 break;
             }
             default: {
@@ -314,8 +296,8 @@ export const onRoundUpdated = functions.firestore.document( `Game/{gameId}/${GAM
             }
         }
 
-
-        return updateGameRound(gameId, roundId, gameRound)
+        console.log("No action taken");
+        return Promise.reject();
     });
 
 //----- Helper Functions
@@ -324,7 +306,7 @@ function notifyUsers(userTokens: string[], messagePayload: object): Promise<any>
     return admin.messaging().sendToDevice(userTokens, messagePayload)
 }
 
-function updateGameRound(roomId: string, roundId: string, updatedGameRound: GameRound): Promise<any> {
+function updateGameRound(roomId: string, roundId: string, updatedGameRound: any): Promise<any> {
     console.log("updating game room");
     console.log(updatedGameRound);
 

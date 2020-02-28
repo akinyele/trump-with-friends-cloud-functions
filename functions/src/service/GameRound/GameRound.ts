@@ -3,6 +3,23 @@ import {GameRound, GameRoundStates} from "../../data/GameRound";
 
 
 /**
+ * determine amount to share.
+ * Amount shared should take into account the following;
+ * - Players can't have less than 2 cards.
+ * - At least one card should always remain in the deck.
+ *
+ * @param numPlayers - the amount of player in the room
+ * @param numCards - the amount of cards in the deck
+ * @return the max amount of cards that can be dealt.
+ */
+export function getMaxAmountOfCardsToDeal(numPlayers: number, numCards: number): number {
+    return (numCards % numPlayers > 0)
+        ? Math.floor(numCards / numPlayers)
+        : (Math.floor(numCards / numPlayers) - 1);
+}
+
+
+/**
  *
  * @param plays
  * @param startingCard
@@ -93,10 +110,9 @@ export function shuffleCards(cards: Array<Card>) : Array<Card>{
     return cards;
 }
 
-export function shareCards(players: Array<string>, deck: Array<Object>, round: number): Array<any> {
+export function shareCards(players: Array<string>, deck: Array<Object>, amountToShare: number): Array<any> {
 
     const numPlayers = players.length;
-    const numCards = deck.length;
     const hands = Array<object>();
 
     // create empty hands
@@ -108,13 +124,8 @@ export function shareCards(players: Array<string>, deck: Array<Object>, round: n
         hands.push(hand);
     }
 
-    // determine amount to share.
-    const maxAmntToShare = (numCards % numPlayers > 0) ? Math.floor(numCards / numPlayers) : (Math.floor(numCards / numPlayers) - 1);
-    let numToShare = maxAmntToShare - (round - 1);
-    if (numToShare <= 1) numToShare = 2; // amount to share should never be less than 2.
-
     // issue cards
-    for (let i = 0; i < numToShare; i++) {
+    for (let i = 0; i < amountToShare; i++) {
         for (const hand of hands) {
             // @ts-ignore
             hand.cards.push(deck.pop())
@@ -126,17 +137,18 @@ export function shareCards(players: Array<string>, deck: Array<Object>, round: n
 /**
  * Creates a new round in a game.
  * @param players
+ * @param round
+ * @param numberCardToDeal
  */
-export async function createRound(players: Array<any>) {
+export async function createRound(players: Array<any>, round: number, numberCardToDeal: number) {
     let hands: Card[];
     let deck = createDeck();
-    const round = 1;
 
     // shuffle the deck
     deck = shuffleCards(deck);
 
     // share the cards
-    [deck, hands] = shareCards(players, deck, round);
+    [deck, hands] = shareCards(players, deck, numberCardToDeal);
 
     const trump = deck.pop();
     if (!trump) {
@@ -156,6 +168,7 @@ export async function createRound(players: Array<any>) {
         deck: deck,
         previousPots: [],
         numberOfPots: hands.length,
+        amountToDeal: numberCardToDeal,
         startingPlayer: players[0]
     };
 
