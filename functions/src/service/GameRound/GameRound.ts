@@ -166,6 +166,7 @@ export function createRound(players: Array<any>, round: number, numberCardToDeal
         pot: {},
         deck: deck,
         previousPots: [],
+        scores: {},
         numberOfRounds: getTotalRounds(players.length),
         amountToDeal: numberCardToDeal,
         amountDealtLastRound: numberCardToDeal - 1,

@@ -164,6 +164,7 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
             state: data.state,
             theTrump: data.theTrump,
             pot: data.pot,
+            scores: data.scores,
             previousPots: data.previousPots,
             userPots: data.userPots,
         };
@@ -340,7 +341,6 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
                     for (const hand of hands) {
                         await fireStore.createHand(roomCode, nextRoundDoc.id, hand);
                     }
-
 
 
                     // todo update scores.

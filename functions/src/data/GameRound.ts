@@ -11,6 +11,7 @@ export interface GameRound {
     deck: Array<any>,
     bids: any,
     pot: any,
+    scores: any,
     userPots: any
     previousPots: Array<any>,
     numberOfRounds?: number,
