@@ -1,3 +1,6 @@
+/**
+ *
+ */
 export interface GameRoom {
     gameMode: any,
     roomName: string,
@@ -5,13 +8,13 @@ export interface GameRoom {
     roomType: any,
     isStarted: any,
     gameState: RoomStates,
-    numberOfRounds: number,
     amountJoined: number,
     maxPlayers: number,
     players: Array<string>,
     roundId?: string,
     round: number,
-    scoreLog: Array<any>,
+    numberOfRounds?: number,
+    scoreLog: any,
     timeCreated: string,
     createdBy: string,
 }

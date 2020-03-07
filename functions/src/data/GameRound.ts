@@ -12,10 +12,11 @@ export interface GameRound {
     bids: any,
     pot: any,
     userPots: any
-    numberOfPots: number,
     previousPots: Array<any>,
-    players: Array<string>,
+    numberOfRounds?: number,
     amountToDeal: number
+    amountDealtLastRound?: number,
+    players: Array<string>,
     startingPlayer: string
 }
 

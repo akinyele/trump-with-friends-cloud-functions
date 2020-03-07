@@ -18,7 +18,6 @@ export function getMaxAmountOfCardsToDeal(numPlayers: number, numCards: number):
         : (Math.floor(numCards / numPlayers) - 1);
 }
 
-
 /**
  *
  * @param plays
@@ -140,7 +139,7 @@ export function shareCards(players: Array<string>, deck: Array<Object>, amountTo
  * @param round
  * @param numberCardToDeal
  */
-export async function createRound(players: Array<any>, round: number, numberCardToDeal: number) {
+export function createRound(players: Array<any>, round: number, numberCardToDeal: number): Array<any> {
     let hands: Card[];
     let deck = createDeck();
 
@@ -167,10 +166,22 @@ export async function createRound(players: Array<any>, round: number, numberCard
         pot: {},
         deck: deck,
         previousPots: [],
-        numberOfPots: hands.length,
+        numberOfRounds: getTotalRounds(players.length),
         amountToDeal: numberCardToDeal,
+        amountDealtLastRound: numberCardToDeal - 1,
         startingPlayer: players[0]
     };
 
     return [gameRound, hands]
+}
+
+/**
+ * The total number of rounds that can be in a trump game.
+ * @param numPlayer
+ */
+export function getTotalRounds(numPlayer: number) {
+    const numberOfCards = 52;
+    const maxAmountToDeal = getMaxAmountOfCardsToDeal(numPlayer,numberOfCards);
+
+    return maxAmountToDeal * 2 - 2
 }
