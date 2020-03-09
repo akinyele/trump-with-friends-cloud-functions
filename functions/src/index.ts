@@ -50,13 +50,13 @@ export const getGames = functions.https.onRequest((request, response) => {
         })
 });
 
-export const testFunction = functions.https.onRequest(async (request, response) => {
-    const body = request.body;
-    const trumpGame = await createRound(body.players, 1, 12);
-
-
-    response.send(trumpGame);
-});
+// export const testFunction = functions.https.onRequest(async (request, response) => {
+//     const body = request.body;
+//     const trumpGame = await createRound(body.players, 1, 12);
+//
+//
+//     response.send(trumpGame);
+// });
 
 /**
  * Cloud function that triggers when game room is updated and does following:
@@ -96,7 +96,7 @@ export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').o
 
             // const CARDS_IN_DECK = 52;
             const amountToDeal  = 3; //getMaxAmountOfCardsToDeal(gameRoomData.players.length, CARDS_IN_DECK);
-            const [firstRound, hands] =  await createRound(gameRoomData.players, 1, amountToDeal);
+            const [firstRound, hands] = createRound(players, 1, amountToDeal, players[0]);
 
             // Create the first round
             const gameRound = await fireStore.createRound(firstRound, gameRoomData.roomCode);
@@ -339,7 +339,7 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
                     const maxAmountToDeal = getMaxAmountOfCardsToDeal(players.length, sizeOfDeck);
                     const minAmountToDeal = 2;
     
-                    // get the amount to deal.
+                    // get the amount to deal for the next round
                     const amountDealtThisRound = gameRound.amountToDeal;
                     const amountDealtLastRound = gameRound.amountDealtLastRound || 0;
 
@@ -347,7 +347,7 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
 
 
                     let amountToDealNextRound = amountDealtThisRound;
-    
+
                     if (!amountDealtLastRound || amountDealtThisRound === maxAmountToDeal) { // if this is the first round.
                         console.log("Decrementing to get amount to deal next round.");
                         amountToDealNextRound--;
@@ -368,7 +368,12 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
                         amountToDealNextRound++
                     }
 
-                    const [nextRound, hands]  = createRound(players, round + 1, amountToDealNextRound);
+                    // get the next starting player.
+                    const indexOfPrevStarter = players.indexOf(gameRound.startingPlayer);
+                    const nextIndex = indexOfPrevStarter + 1;
+                    const nextStarter = (nextIndex < players.length) ? players[nextIndex] : players[0];
+
+                    const [nextRound, hands]  = createRound(players, round + 1, amountToDealNextRound, nextStarter);
                     nextRound.amountDealtLastRound = amountDealtThisRound;
 
 

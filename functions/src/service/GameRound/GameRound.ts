@@ -138,8 +138,9 @@ export function shareCards(players: Array<string>, deck: Array<Object>, amountTo
  * @param players
  * @param round
  * @param numberCardToDeal
+ * @param startingPlayer
  */
-export function createRound(players: Array<any>, round: number, numberCardToDeal: number): Array<any> {
+export function createRound(players: Array<any>, round: number, numberCardToDeal: number, startingPlayer: string): Array<any> {
     let hands: Card[];
     let deck = createDeck();
 
@@ -169,8 +170,7 @@ export function createRound(players: Array<any>, round: number, numberCardToDeal
         scores: {},
         numberOfRounds: getTotalRounds(players.length),
         amountToDeal: numberCardToDeal,
-        amountDealtLastRound: numberCardToDeal - 1,
-        startingPlayer: players[0]
+        startingPlayer: startingPlayer
     };
 
     return [gameRound, hands]
