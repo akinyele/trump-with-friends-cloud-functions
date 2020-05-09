@@ -8,6 +8,7 @@ import {Card} from "./data/Card";
 import * as fireStore from "./service/fireStoreDataSource";
 import {GameRoomStates} from "./service/Game/GameRoom";
 import {RoomStates} from "./data/GameRoom";
+import {shuffle} from "./utils";
 
 const USER_COLLECTION: string = "User";
 const GAME_ROOM_COLLECTION: string = "Game";
@@ -93,10 +94,12 @@ export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').o
                 },
                 data: {...messageData.data}
             };
+            const playerOrder = shuffle(players);
 
-            // const CARDS_IN_DECK = 52;
-            const amountToDeal  = 3; //getMaxAmountOfCardsToDeal(gameRoomData.players.length, CARDS_IN_DECK);
-            const [firstRound, hands] = createRound(players, 1, amountToDeal, players[0]);
+            const CARDS_IN_DECK = 52;
+            const amountToDeal  = getMaxAmountOfCardsToDeal(gameRoomData.players.length, CARDS_IN_DECK);
+            // const amountToDeal  = 3; //getMaxAmountOfCardsToDeal(gameRoomData.players.length, CARDS_IN_DECK);
+            const [firstRound, hands] = createRound(playerOrder, 1, amountToDeal, players[0]);
 
             // Create the first round
             const gameRound = await fireStore.createRound(firstRound, gameRoomData.roomCode);
@@ -156,8 +159,8 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
         }
 
         const gameRound: GameRound = {
+            // id: data.id,
             amountToDeal: data.amountToDeal,
-            id: data.id,
             bids: data.bids,
             players: data.players,
             deck: data.deck,
@@ -170,6 +173,7 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
             previousPots: data.previousPots,
             amountDealtLastRound: data.amountDealtLastRound,
             userPots: data.userPots,
+
         };
 
         const  ROUND_CURRENT_STATE = gameRound.state;

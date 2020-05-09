@@ -4,7 +4,7 @@
 import {Card} from "./Card";
 
 export interface GameRound {
-    id: string,
+    // id: string,
     number: number,
     state: GameRoundStates,
     theTrump: Card,

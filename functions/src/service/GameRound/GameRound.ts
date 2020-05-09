@@ -1,5 +1,6 @@
 import {Card, Rank, Suite} from "../../data/Card";
 import {GameRound, GameRoundStates} from "../../data/GameRound";
+import {shuffle} from "../../utils";
 
 
 /**
@@ -96,18 +97,19 @@ export function createDeck(): Array<Card> {
     return cards;
 }
 
-export function shuffleCards(cards: Array<Card>) : Array<Card>{
-    // Fisher-Yates algorithm
-    // https://gamedevelopment.tutsplus.com/tutorials/quick-tip-shuffle-cards-or-any-elements-with-the-fisher-yates-shuffle-algorithm--gamedev-6314
-    for (let i = cards.length; i < 0; i++) {
-        const randomPos = Math.floor(Math.random() * i);
-        const temp = cards[i];
-        cards[i] = cards[randomPos];
-        cards[randomPos] = temp;
-    }
+// export function shuffleCards(cards: Array<Card>) : Array<Card>{
+//     // Fisher-Yates algorithm
+//     // https://gamedevelopment.tutsplus.com/tutorials/quick-tip-shuffle-cards-or-any-elements-with-the-fisher-yates-shuffle-algorithm--gamedev-6314
+//     for (let i = cards.length; i < 0; i++) {
+//         const randomPos = Math.floor(Math.random() * i);
+//         const temp = cards[i];
+//         cards[i] = cards[randomPos];
+//         cards[randomPos] = temp;
+//     }
+//
+//     return cards;
+// }
 
-    return cards;
-}
 
 export function shareCards(players: Array<string>, deck: Array<Object>, amountToShare: number): Array<any> {
 
@@ -145,7 +147,7 @@ export function createRound(players: Array<any>, round: number, numberCardToDeal
     let deck = createDeck();
 
     // shuffle the deck
-    deck = shuffleCards(deck);
+    deck = shuffle(deck);
 
     // share the cards
     [deck, hands] = shareCards(players, deck, numberCardToDeal);
@@ -157,7 +159,6 @@ export function createRound(players: Array<any>, round: number, numberCardToDeal
     }
 
     const gameRound : GameRound = {
-        id: "",
         number: round,
         state: GameRoundStates.BIDDING,
         theTrump: trump,
