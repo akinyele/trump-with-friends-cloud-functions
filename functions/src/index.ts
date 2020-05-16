@@ -96,9 +96,9 @@ export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').o
             };
             const playerOrder = shuffle(players);
 
-            const CARDS_IN_DECK = 52;
-            const amountToDeal  = getMaxAmountOfCardsToDeal(gameRoomData.players.length, CARDS_IN_DECK);
-            // const amountToDeal  = 3; //getMaxAmountOfCardsToDeal(gameRoomData.players.length, CARDS_IN_DECK);
+            // const CARDS_IN_DECK = 52;
+            // const amountToDeal  = getMaxAmountOfCardsToDeal(gameRoomData.players.length, CARDS_IN_DECK);
+            const amountToDeal  = 3;
             const [firstRound, hands] = createRound(playerOrder, 1, amountToDeal, players[0]);
 
             // Create the first round
@@ -287,7 +287,9 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
                     const bids = gameRound.bids;
 
                     for (const player of players) {
-                        const amountReceived = usersPots[player].length;
+                        // get the pots won by the user.
+                        const userPot = usersPots[player] || []
+                        const amountReceived = userPot.length;
                         const amountBid = bids[player];
 
                         if (amountBid > amountReceived) {
