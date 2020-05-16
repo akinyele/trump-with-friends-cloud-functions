@@ -7,7 +7,6 @@ import {GameRound, GameRoundStates} from "./data/GameRound"
 import {Card} from "./data/Card";
 import * as fireStore from "./service/fireStoreDataSource";
 import {GameRoomStates} from "./service/Game/GameRoom";
-import {RoomStates} from "./data/GameRoom";
 import {shuffle} from "./utils";
 
 const USER_COLLECTION: string = "User";
@@ -119,7 +118,7 @@ export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').o
             gameRoomData.roundId = gameRound.id;
             gameRoomData.round = 1;
             gameRoomData.numberOfRounds = 4; // getTotalRounds(players.length);
-            gameRoomData.gameState = RoomStates.PLAYING;
+            gameRoomData.gameState = GameRoomStates.PLAYING;
             await admin.firestore().doc(`Game/${gameRoomData.roomCode}`).update(gameRoomData);
 
 
@@ -320,11 +319,17 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
                 // End
                 console.log(`Game round has ended calculating scores for round.`);
 
+                // Get the game room
+                const snapshot = await fireStore.getGameRoom(roomCode)
+                const gameRoom = snapshot.data()
+
+
+
 
                 // - check if this was the last round.
                 
                 // @ts-ignore
-                const isLastRound = gameRound.number === gameRound.numberOfRounds;
+                const isLastRound = gameRound.number === gameRoom.numberOfRounds;
 
                 if (isLastRound) {
                     // end game
@@ -332,9 +337,10 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
 
                     // TODO update game score.
                     return  fireStore.updateGameRoom(roomCode, {
-                        state: GameRoomStates.FINISHED
+                        gameState: GameRoomStates.FINISHED
                     });
-                } else {
+                }
+                else {
                     
                     // - create next round (if game still going)
                     const players = gameRound.players;

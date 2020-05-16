@@ -2,6 +2,7 @@ import * as admin from 'firebase-admin';
 import {GAME_ROOM_COLLECTION, GAME_ROUND_COLLECTION, HANDS_COLLECTIONS} from "../const/FirststoreConstants";
 // tslint:disable-next-line:no-implicit-dependencies
 import { DocumentReference, WriteResult } from '@google-cloud/firestore';
+import {DocumentSnapshot} from "firebase-functions/lib/providers/firestore";
 
 
 export async function gameRoundCollection(roomCode: string) {
@@ -65,4 +66,11 @@ export async function updateGameRoom(roomCode: string, gameRoom: any) : Promise<
         .collection(GAME_ROOM_COLLECTION)
         .doc(roomCode)
         .update(gameRoom);
+}
+
+export async function getGameRoom(roomCode: string): Promise<DocumentSnapshot> {
+    return admin.firestore()
+    .collection(GAME_ROOM_COLLECTION)
+    .doc(roomCode)
+    .get()
 }
