@@ -63,9 +63,9 @@ export const getGames = functions.https.onRequest((request, response) => {
  * 1. Checks if game is ready. ie if all the users have joined.
  * 2. Create the first round of the game.
  * 2. Notify the user's when the game is ready.
-*/
+ */
 export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').onUpdate(async change => {
-    const gameRoomData = change.after.data() ;
+    const gameRoomData = change.after.data();
 
     // Check to see if the game room is full
     console.log("game room updated", gameRoomData);
@@ -95,9 +95,9 @@ export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').o
             };
             const playerOrder = shuffle(players);
 
-            // const CARDS_IN_DECK = 52;
-            // const amountToDeal  = getMaxAmountOfCardsToDeal(gameRoomData.players.length, CARDS_IN_DECK);
-            const amountToDeal  = 3;
+            const CARDS_IN_DECK = 52;
+            const amountToDeal  = getMaxAmountOfCardsToDeal(gameRoomData.players.length, CARDS_IN_DECK);
+            // const amountToDeal = 3; // TODO REMOVE IN PROD
             const [firstRound, hands] = createRound(playerOrder, 1, amountToDeal, players[0]);
 
             // Create the first round
@@ -120,7 +120,6 @@ export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').o
             gameRoomData.numberOfRounds = 4; // getTotalRounds(players.length);
             gameRoomData.gameState = GameRoomStates.PLAYING;
             await admin.firestore().doc(`Game/${gameRoomData.roomCode}`).update(gameRoomData);
-
 
 
             console.log("sending notification to users", tokens, payload);
@@ -148,10 +147,10 @@ export const onGameRoomUpdated = functions.firestore.document('Game/{gameId}').o
  * 3. Check to see if the rounds has finish.
  * 4. Determine the scores for the round and add it to the room.
  */
-export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${GAME_ROUND_COLLECTION}/{roundId}`)
-    .onUpdate( async (change, context) => {
+export const onRoundUpdated = functions.firestore.document(`Game/{roomCode}/${GAME_ROUND_COLLECTION}/{roundId}`)
+    .onUpdate(async (change, context) => {
 
-        const data =  change.after.data();
+        const data = change.after.data();
         if (!data) {
             console.error("Failed to parse game rounds change", data);
             return;
@@ -175,7 +174,7 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
 
         };
 
-        const  ROUND_CURRENT_STATE = gameRound.state;
+        const ROUND_CURRENT_STATE = gameRound.state;
         const {roomCode, roundId} = context.params;
 
 
@@ -196,7 +195,7 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
                 // - create first pot (the order determines who plays first)
                 if (!bidsLeft) {
                     // update game round to next state;
-                    const newState =  GameRoundStates.PLAYING;
+                    const newState = GameRoundStates.PLAYING;
                     gameRound.state = newState;
                     console.log(`all bids have been set, setting game state to ${newState}`);
 
@@ -215,7 +214,6 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
 
                 const {players, pot, theTrump, userPots, startingPlayer, amountToDeal} = gameRound;
                 let {previousPots} = gameRound;
-
 
 
                 // - check everyone play in the first pot
@@ -237,7 +235,7 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
                  *  the winner of the last pot or whoever is starting the round.
                  */
                 let startingCard;
-                if (!previousPots.length)  startingCard = pot[startingPlayer];
+                if (!previousPots.length) startingCard = pot[startingPlayer];
                 else startingCard = pot[previousPots[0].winner];
 
                 if (startingCard === undefined) {
@@ -248,7 +246,7 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
 
                 // get winner for the pot
                 console.log("All players have played in this pot, getting the winner.");
-                const potWinner = getWinner(new Map<string, Card>(Object.entries(pot)),  startingCard, theTrump);
+                const potWinner = getWinner(new Map<string, Card>(Object.entries(pot)), startingCard, theTrump);
 
                 if (!potWinner) {
                     console.log("Failed to get winner");
@@ -293,10 +291,10 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
 
                         if (amountBid > amountReceived) {
                             // score should be amount bid times ten
-                            scores[player] = 0 - amountBid*10
+                            scores[player] = 0 - amountBid * 10
                         } else {
                             // score should be amount bid times ten plus the amount went over.
-                            scores[player] = amountBid*10 + (amountReceived-amountBid)
+                            scores[player] = amountBid * 10 + (amountReceived - amountBid)
                         }
                     }
                 }
@@ -323,11 +321,24 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
                 const snapshot = await fireStore.getGameRoom(roomCode)
                 const gameRoom = snapshot.data()
 
+                if (!gameRoom) {
+                    // TODO handle the cases where the game room was not found.
+                    return Promise.reject("Game Round finished: Failed to find game room");
+                }
 
+                // - tally score
+
+                const scores = gameRoom.scores;
+                for (const player of gameRoom.players) {
+                    const playerRoundScore = gameRound.scores[player] || 0
+                    const playerTotalScore = scores[player] || 0
+
+                    scores[player] = playerTotalScore + playerRoundScore;
+                }
 
 
                 // - check if this was the last round.
-                
+
                 // @ts-ignore
                 const isLastRound = gameRound.number === gameRoom.numberOfRounds;
 
@@ -336,21 +347,21 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
                     console.log("This was the final round. The trump game has ended.");
 
                     // TODO update game score.
-                    return  fireStore.updateGameRoom(roomCode, {
-                        gameState: GameRoomStates.FINISHED
+                    return fireStore.updateGameRoom(roomCode, {
+                        gameState: GameRoomStates.FINISHED,
+                        scores
                     });
-                }
-                else {
-                    
+                } else {
+
                     // - create next round (if game still going)
                     const players = gameRound.players;
                     const round = gameRound.number;
-    
-    
+
+
                     const sizeOfDeck = 52;
                     const maxAmountToDeal = getMaxAmountOfCardsToDeal(players.length, sizeOfDeck);
                     const minAmountToDeal = 2;
-    
+
                     // get the amount to deal for the next round
                     const amountDealtThisRound = gameRound.amountToDeal;
                     const amountDealtLastRound = gameRound.amountDealtLastRound || 0;
@@ -363,18 +374,15 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
                     if (!amountDealtLastRound || amountDealtThisRound === maxAmountToDeal) { // if this is the first round.
                         console.log("Decrementing to get amount to deal next round.");
                         amountToDealNextRound--;
-                    }
-                    else if ( amountDealtLastRound > amountDealtThisRound && amountDealtThisRound !== minAmountToDeal) {
+                    } else if (amountDealtLastRound > amountDealtThisRound && amountDealtThisRound !== minAmountToDeal) {
                         // if amount deal this round is not min and the last round was greater then we decrement.
                         console.log("Still decrementing to get amount to deal next round.");
                         amountToDealNextRound--
-                    }
-                    else if (amountDealtThisRound === minAmountToDeal && amountDealtLastRound !== minAmountToDeal) {
+                    } else if (amountDealtThisRound === minAmountToDeal && amountDealtLastRound !== minAmountToDeal) {
                         // if the amount deal this round was min and the amount deal last round was min then we got min again.
                         console.log("We are at the lowest amount to deal.");
                         amountToDealNextRound = minAmountToDeal;
-                    }
-                    else {
+                    } else {
                         // if last round and current round was min then we increment
                         console.log("Start incrementing amount to deal.");
                         amountToDealNextRound++
@@ -385,13 +393,12 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
                     const nextIndex = indexOfPrevStarter + 1;
                     const nextStarter = (nextIndex < players.length) ? players[nextIndex] : players[0];
 
-                    const [nextRound, hands]  = createRound(players, round + 1, amountToDealNextRound, nextStarter);
+                    const [nextRound, hands] = createRound(players, round + 1, amountToDealNextRound, nextStarter);
                     nextRound.amountDealtLastRound = amountDealtThisRound;
 
 
-
                     const nextRoundDoc = await fireStore.createRound(nextRound, roomCode);
-    
+
                     for (const hand of hands) {
                         await fireStore.createHand(roomCode, nextRoundDoc.id, hand);
                     }
@@ -399,9 +406,10 @@ export const onRoundUpdated = functions.firestore.document( `Game/{roomCode}/${G
                     return fireStore.updateGameRoom(roomCode, {
                         roundId: nextRoundDoc.id,
                         round: nextRound.number,
+                        scores
                     });
                 }
-                
+
                 // const {players} = gameRound= createRound(players);
             }
             default: {
